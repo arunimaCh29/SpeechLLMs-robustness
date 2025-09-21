@@ -2,17 +2,22 @@
 __pycache__/
 *.py[codz]
 *$py.class
-
+*.arrow
+*.zip
 # C extensions
 *.so
 
 # Distribution / packaging
 .Python
+vctk_corpus/
 build/
 develop-eggs/
 dist/
 downloads/
 eggs/
+*.lock
+*flac
+*.wav
 .eggs/
 lib/
 lib64/

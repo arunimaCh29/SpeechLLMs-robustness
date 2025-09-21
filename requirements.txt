@@ -1,0 +1,23 @@
+# Core ML/DL frameworks
+torch
+torchaudio
+torchvision
+
+# Hugging Face ecosystem
+transformers
+datasets
+evaluate
+accelerate
+bitsandbytes
+peft
+
+# Evaluation metrics
+bert-score
+jiwer # For WER calculation
+
+# Audio data augmentation
+audiomentations
+
+# Optional for data handling
+pandas
+tqdm
