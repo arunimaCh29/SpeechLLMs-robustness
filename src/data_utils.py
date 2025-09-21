@@ -74,10 +74,13 @@ class SIFT50MDataset(IterableDataset):
                     self._build_common_voice_csv_mapping("en", csv_path)
                 references[ds_name] = pd.read_csv(csv_path)
             elif ds_name == "multilingual_librispeech_de":
-                csv_path = "mls_mapping_en.csv"
+                '''csv_path = "mls_mapping_en.csv"
                 if not os.path.exists(csv_path):
-                    self._build_mls_csv_mapping(csv_path)
-                references[ds_name] = pd.read_csv(csv_path)
+                    self._build_mls_csv_mapping(csv_path)'''
+                dataset = load_dataset("facebook/multilingual_librispeech", "german", split="train")
+                df = dataset.to_pandas()
+                df.set_index('id', inplace=True)
+                references[ds_name] = df
             elif ds_name == "vctk_en":
                 # For VCTK, pre-build a mapping for faster lookups
                 vctk_dataset = torchaudio.datasets.VCTK_092(root=ds_path, download=False)
@@ -99,10 +102,11 @@ class SIFT50MDataset(IterableDataset):
             if len(matching_rows) > 0:
                 return matching_rows.iloc[0]['audio_path']
         elif data_source == "multilingual_librispeech_de":
-           mls_df = self.base_dataset_references[data_source]
-            matching_rows = mls_df[mls_df['id'] == target_id]
-            if len(matching_rows) > 0:
-                return matching_rows.iloc[0]['audio']
+
+            mls_df = self.base_dataset_references[data_source]
+            if target_id in mls_df.index:
+                return mls_df.loc[target_id]['audio']  # Return full audio data
+            return None
         elif data_source == "vctk_en":
             # VCTK now uses a pre-built mapping
             vctk_mapping = self.base_dataset_references[data_source]
