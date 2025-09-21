@@ -34,6 +34,24 @@ class SIFT50MDataset(IterableDataset):
         print(f"Common Voice {lang} mapping saved to {csv_path}")
         return df
 
+    def _build_vctk_mapping(self, csv_path,ds_path):
+        # Load the Common Voice dataset
+        vctk_dataset = torchaudio.datasets.VCTK_092(root=ds_path, download=False)
+        vctk_mapping = []
+        for i in tqdm(range(len(vctk_dataset))):
+            wave, sr, _, speaker_id_vctk, utterance_id = vctk_dataset[i]
+            sift_id = f"{speaker_id_vctk}_{utterance_id}"
+            vctk_mapping.append({
+                'id': sift_id,
+                'audio_path': f'{ds_path}/VCTK-Corpus-0.92/wav48_silence_trimmed/{speaker_id_vctk}/{speaker_id_vctk}_{utterance_id}_mic2.flac'
+            })
+        
+        # Create DataFrame and save to CSV
+        df = pd.DataFrame(vctk_mapping)
+        df.to_csv(csv_path, index=True)
+        print(f"Vctk mapping saved to {csv_path}")
+        return df
+
     def _build_mls_csv_mapping(csv_path):
         dataset = load_dataset(
             "facebook/multilingual_librispeech",
@@ -83,13 +101,10 @@ class SIFT50MDataset(IterableDataset):
                 references[ds_name] = df
             elif ds_name == "vctk_en":
                 # For VCTK, pre-build a mapping for faster lookups
-                vctk_dataset = torchaudio.datasets.VCTK_092(root=ds_path, download=False)
-                vctk_mapping = {}
-                for i in range(len(vctk_dataset)):
-                    wave, sr, _, speaker_id_vctk, utterance_id = vctk_dataset[i]
-                    sift_id = f"{speaker_id_vctk}_{utterance_id}"
-                    vctk_mapping[sift_id] = {'waveform':wave, 'sampling_rate':sr}
-                references[ds_name] = vctk_mapping # Store the pre-built mapping
+                csv_path = "./data/vctk_mapping.csv"
+                if not os.path.exists(csv_path):
+                    self._build_vctk_mapping(csv_path,ds_path)
+                references[ds_name] = pd.read_csv(csv_path)
         return references
 
     def _get_audio_path_from_base_dataset(self, data_source, target_id):
@@ -108,7 +123,9 @@ class SIFT50MDataset(IterableDataset):
         elif data_source == "vctk_en":
             # VCTK now uses a pre-built mapping
             vctk_mapping = self.base_dataset_references[data_source]
-            return vctk_mapping.get(target_id)
+            matching_rows = vctk_mapping[vctk_mapping['id'] == target_id]
+            if len(matching_rows) > 0:
+                return matching_rows.iloc[0]['audio_path']
         return None
 
     def _process_content_list(self, content_list, data_source, target_ids):
@@ -146,6 +163,7 @@ class SIFT50MDataset(IterableDataset):
 
     def __iter__(self):
         for entry in self.sift_dataset:
+            
             data_source = entry['data_source']
             sift_entry_id = entry['id']
 
