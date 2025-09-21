@@ -87,10 +87,8 @@ class SIFT50MDataset(IterableDataset):
                 vctk_mapping = {}
                 for i in range(len(vctk_dataset)):
                     wave, sr, _, speaker_id_vctk, utterance_id = vctk_dataset[i]
-                    filename_stem = os.path.splitext(os.path.basename(audio_path))[0]
-                    utterance_id = filename_stem.split('_')[-1]
                     sift_id = f"{speaker_id_vctk}_{utterance_id}"
-                    vctk_mapping[sift_id] = {waveform:wave, sampling_rate:sr}
+                    vctk_mapping[sift_id] = {'waveform':wave, 'sampling_rate':sr}
                 references[ds_name] = vctk_mapping # Store the pre-built mapping
         return references
 
@@ -150,7 +148,6 @@ class SIFT50MDataset(IterableDataset):
         for entry in self.sift_dataset:
             data_source = entry['data_source']
             sift_entry_id = entry['id']
-            print(data_source, entry)
 
             # Process SIFT-50M ID to get target IDs for matching
             processed_sift_id_string = re.sub(r"^comparison_", "", sift_entry_id)
@@ -168,7 +165,6 @@ class SIFT50MDataset(IterableDataset):
                     current_found_path = self._process_content_list(role_entry['content'], data_source, target_ids)
                     if current_found_path: 
                         total_found_audio_path = current_found_path
-
             entry['messages'] = modified_message # Update the entry with modified message
 
             yield {
