@@ -39,7 +39,7 @@ def train_model(eval_ds, train_ds, processor, custom_data_collator):
         save_strategy="epoch",
         learning_rate=0.001,
         bf16=True,
-        report_to="none",
+        report_to="tensorboard",
         packing=False,
         gradient_checkpointing= True,
         #dataset_text_field="messages",
@@ -48,7 +48,7 @@ def train_model(eval_ds, train_ds, processor, custom_data_collator):
     
     
     qlora_config = LoraConfig(
-        r=8,
+        r=16,
         lora_alpha=32,
         lora_dropout=0.05,
         bias="none",

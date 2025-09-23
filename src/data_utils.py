@@ -10,15 +10,21 @@ from tqdm import tqdm
 import librosa
 
 class SIFT50MDataset(IterableDataset):
-    def __init__(self, sift_dataset: Dataset, base_datasets_paths):
+    def __init__(self, sift_dataset: Dataset, base_datasets_paths, eval_set=False, test_set= False):
         self.sift_dataset = sift_dataset
         self.base_datasets_paths = base_datasets_paths
+        self.eval_set = eval_set
+        self.test_set = test_set
         # print(self.sift_dataset) # Commented out for cleaner output
         self.base_dataset_references = self._load_base_dataset_references()
 
     def _build_common_voice_csv_mapping(self, lang, csv_path):
+        
         # Load the Common Voice dataset
-        dataset = load_dataset("mozilla-foundation/common_voice_15_0", lang, split="train", trust_remote_code=True)
+        if self.test_set:
+            dataset = load_dataset("mozilla-foundation/common_voice_15_0", lang, split="test", trust_remote_code=True) 
+        else:
+            dataset = load_dataset("mozilla-foundation/common_voice_15_0", lang, split="train", trust_remote_code=True)
         #print('mapping csv')
         dataset = dataset.cast_column("audio", Audio(decode=False))
         # Create a list of dictionaries for the CSV
@@ -39,7 +45,7 @@ class SIFT50MDataset(IterableDataset):
             
         # Create DataFrame and save to CSV
         df = pd.DataFrame(mapping_data)
-        df.to_csv(csv_path, index=False)
+        df.to_csv(csv_path, index=True)
         print(f"Common Voice {lang} mapping saved to {csv_path}")
         return df
 
@@ -90,13 +96,19 @@ class SIFT50MDataset(IterableDataset):
             #print(ds_name, ds_path)
             if ds_name == "common_voice_de":
                 # Build CSV mapping for German Common Voice
-                csv_path = "./data/common_voice_de_mapping.csv"
+                if self.test_set:
+                   csv_path = "./data/common_voice_de_test_mapping.csv" 
+                else:
+                    csv_path = "./data/common_voice_de_mapping.csv"
                 if not os.path.exists(csv_path):
                     self._build_common_voice_csv_mapping("de", csv_path)
                 references[ds_name] = pd.read_csv(csv_path)
             elif ds_name == "common_voice_en":
                 # Build CSV mapping for English Common Voice
-                csv_path = "./data/common_voice_en_mapping.csv"
+                if self.test_set:
+                   csv_path = "./data/common_voice_en_test_mapping.csv" 
+                else:
+                    csv_path = "./data/common_voice_en_mapping.csv"
                 if not os.path.exists(csv_path):
                     self._build_common_voice_csv_mapping("en", csv_path)
                 references[ds_name] = pd.read_csv(csv_path)
@@ -154,10 +166,12 @@ class SIFT50MDataset(IterableDataset):
                 # Process audio items
                 if 'audio_path' in item.keys() and item['audio_path'] is not None:
                     filename_without_ext = os.path.splitext(os.path.basename(item['audio_path']))[0]
+                    print(filename_without_ext)
                     
                     for target_id in target_ids:
                         if filename_without_ext == target_id:
                             mapped_audio_path = self._get_audio_path_from_base_dataset(data_source, target_id)
+                            print(mapped_audio_path)
                             if mapped_audio_path:
                                 # Rename the key and add type
                                 item['audio_path'] = mapped_audio_path
@@ -185,7 +199,7 @@ class SIFT50MDataset(IterableDataset):
             #processed_sift_id_string = re.sub(r"^comparison_", "", sift_entry_id)
             #target_ids = processed_sift_id_string.split("__")
             target_ids= [sift_entry_id]
-            #print(target_ids)
+            print(target_ids)
             
             # Ensure 'message' is a list of dictionaries and create a mutable copy
             modified_message = entry['messages'].copy() if isinstance(entry['messages'], list) else []
@@ -197,4 +211,5 @@ class SIFT50MDataset(IterableDataset):
                     current_found_path = self._process_content_list(role_entry['content'], data_source, target_ids)
 
             entry['messages'] = modified_message # Update the entry with modified message
+            print(entry)
             yield entry
