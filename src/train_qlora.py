@@ -8,7 +8,7 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 
     
-def train_model(eval_ds, train_ds, processor, custom_data_collator):
+def train_model(eval_ds, train_ds, processor, custom_data_collator, resume=False):
     model_id = "Qwen/Qwen2-Audio-7B-Instruct"
     save_dir = './qwen2-audio-7B-content'
     
@@ -35,11 +35,19 @@ def train_model(eval_ds, train_ds, processor, custom_data_collator):
         num_train_epochs=1,
         max_steps=1000,
         logging_steps=10,
-        eval_strategy="epoch",
-        save_strategy="epoch",
+        logging_dir="./logs",                # local TensorBoard logs
+        logging_strategy="steps",            # "steps" or "epoch"
+        report_to='none', # where to report
+        run_name="qwen2-audio-qlora",
+        #eval_strategy="epoch",
+        eval_strategy="steps",
+        eval_steps=500,       # run eval every 500 training steps
+        save_strategy="steps",
+        save_steps=500,
+       # save_strategy="epoch",
         learning_rate=0.001,
         bf16=True,
-        report_to="tensorboard",
+        load_best_model_at_end= True,      
         packing=False,
         gradient_checkpointing= True,
         #dataset_text_field="messages",
@@ -66,5 +74,5 @@ def train_model(eval_ds, train_ds, processor, custom_data_collator):
        data_collator=custom_data_collator
     )
     
-    trainer_qlora.train()
+    trainer_qlora.train(resume_from_checkpoint=resume)
     return model

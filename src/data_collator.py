@@ -51,21 +51,22 @@ class CustomDataCollator:
 
                 if audio_signals:
                     batch_audio_data.extend(audio_signals)
-                else:
-                    print("No valid audio files found for a sample. Skipping.")
-                    continue
+                                # --- process text ---
+                    text_formatted = self.processor.apply_chat_template(
+                        conversation,
+                        add_generation_prompt=False,
+                        tokenize=False,
+                    )
+                    batch_text.append(text_formatted)
+                    
             else:
                 print("No audio path found in the sample. Skipping.")
                 continue
 
-            # --- process text ---
-            text_formatted = self.processor.apply_chat_template(
-                conversation,
-                add_generation_prompt=False,
-                tokenize=False,
-            )
-            batch_text.append(text_formatted)
 
+        if not batch_text or not batch_audio_data:
+            print("Warning: No valid samples in this batch. Skipping batch.")
+            return {}
         # --- process with processor ---
         inputs = self.processor(
             text=batch_text,

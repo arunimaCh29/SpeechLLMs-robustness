@@ -10,10 +10,9 @@ from tqdm import tqdm
 import librosa
 
 class SIFT50MDataset(IterableDataset):
-    def __init__(self, sift_dataset: Dataset, base_datasets_paths, eval_set=False, test_set= False):
+    def __init__(self, sift_dataset: Dataset, base_datasets_paths, test_set= False):
         self.sift_dataset = sift_dataset
         self.base_datasets_paths = base_datasets_paths
-        self.eval_set = eval_set
         self.test_set = test_set
         # print(self.sift_dataset) # Commented out for cleaner output
         self.base_dataset_references = self._load_base_dataset_references()
@@ -103,6 +102,7 @@ class SIFT50MDataset(IterableDataset):
                 if not os.path.exists(csv_path):
                     self._build_common_voice_csv_mapping("de", csv_path)
                 references[ds_name] = pd.read_csv(csv_path)
+                #print(csv_path)
             elif ds_name == "common_voice_en":
                 # Build CSV mapping for English Common Voice
                 if self.test_set:
@@ -129,10 +129,13 @@ class SIFT50MDataset(IterableDataset):
         return references
 
     def _get_audio_path_from_base_dataset(self, data_source, target_id):
+        #print(data_source)
         if data_source == "common_voice_de" or data_source == "common_voice_en":
             # Common Voice now uses a pre-built CSV mapping
             cv_df = self.base_dataset_references[data_source]
+            #print(target_id)
             matching_rows = cv_df[cv_df['id'] == target_id]
+            #print('matching row',matching_rows)
             if len(matching_rows) > 0:
                 return matching_rows.iloc[0]['audio_path']
         elif data_source == "multilingual_librispeech_de":
@@ -160,23 +163,28 @@ class SIFT50MDataset(IterableDataset):
         for item in content_list:
             if isinstance(item, dict):
                 # Add 'type' for text items
+                #print(item)
                 if 'text' in item.keys() and item['text'] is not None:
                     item['type'] = 'text'
                 
                 # Process audio items
                 if 'audio_path' in item.keys() and item['audio_path'] is not None:
                     filename_without_ext = os.path.splitext(os.path.basename(item['audio_path']))[0]
-                    print(filename_without_ext)
+                    #print('inside audio loop',filename_without_ext)
                     
                     for target_id in target_ids:
                         if filename_without_ext == target_id:
+                            #print('target_id',target_id)
                             mapped_audio_path = self._get_audio_path_from_base_dataset(data_source, target_id)
-                            print(mapped_audio_path)
+                            #print(mapped_audio_path)
+                            #if os.path.exists(mapped_audio_path):
                             if mapped_audio_path:
                                 # Rename the key and add type
                                 item['audio_path'] = mapped_audio_path
                                 item['type'] = 'audio'
                                 found_urls.append(mapped_audio_path)
+                            else:
+                                print(f'Path not found for id: {target_id}')
                 
                 # Handle nested lists/dictionaries
                 for key, value in item.items():
@@ -199,17 +207,26 @@ class SIFT50MDataset(IterableDataset):
             #processed_sift_id_string = re.sub(r"^comparison_", "", sift_entry_id)
             #target_ids = processed_sift_id_string.split("__")
             target_ids= [sift_entry_id]
-            print(target_ids)
+            #print(target_ids)
             
             # Ensure 'message' is a list of dictionaries and create a mutable copy
             modified_message = entry['messages'].copy() if isinstance(entry['messages'], list) else []
             
-
+            found_any_audio = False
             # Iterate through the top-level list (user/assistant roles)
             for role_entry in modified_message:
                 if isinstance(role_entry, dict) and 'content' in role_entry.keys() and role_entry['role'] != 'assistant':
                     current_found_path = self._process_content_list(role_entry['content'], data_source, target_ids)
+                    #print(current_found_path)
+                    if len(current_found_path) > 0:
+                        found_any_audio = True
 
-            entry['messages'] = modified_message # Update the entry with modified message
-            print(entry)
-            yield entry
+            if found_any_audio:
+                entry['messages'] = modified_message
+                yield entry
+            else:
+                # Optional: print or log skipped entries
+                print(f"Skipping entry {sift_entry_id}, no valid audio found.")
+                continue
+
+
