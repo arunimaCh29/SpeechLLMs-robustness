@@ -3,12 +3,14 @@ from transformers import TrainingArguments
 from trl import SFTTrainer, SFTConfig 
 from transformers import BitsAndBytesConfig, AutoModelForCausalLM
 from transformers import AutoProcessor, Qwen2AudioForConditionalGeneration, BitsAndBytesConfig
-
+from src.data_collator import CustomDataCollator
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
-def train_model(eval_ds, train_ds):
+
+    
+def train_model(eval_ds, train_ds, processor, custom_data_collator):
     model_id = "Qwen/Qwen2-Audio-7B-Instruct"
-    save_dir = './qwen2-audio-7B-1x'
+    save_dir = './qwen2-audio-7B-content'
     
     # Configure quantization
     bnb_config = BitsAndBytesConfig(
@@ -18,13 +20,11 @@ def train_model(eval_ds, train_ds):
         bnb_4bit_compute_dtype=torch.bfloat16
     )
     
-    # Load the model and processor
-    processor = AutoProcessor.from_pretrained(model_id)
     
     model = Qwen2AudioForConditionalGeneration.from_pretrained(
         model_id,
         quantization_config=bnb_config,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         device_map="auto"
     )
         
@@ -37,11 +37,12 @@ def train_model(eval_ds, train_ds):
         logging_steps=10,
         eval_strategy="epoch",
         save_strategy="epoch",
-        learning_rate=2e-4,
+        learning_rate=0.001,
         bf16=True,
         report_to="none",
         packing=False,
-        dataset_text_field="messages",
+        gradient_checkpointing= True,
+        #dataset_text_field="messages",
         push_to_hub = True
     )
     
@@ -55,11 +56,6 @@ def train_model(eval_ds, train_ds):
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
     )
         
-    # Prepare the model for k-bit training
-    model = prepare_model_for_kbit_training(model)
-    
-    # Get the PEFT model
-    model = get_peft_model(model, qlora_config)
     
     trainer_qlora = SFTTrainer(
         model=model,
@@ -67,6 +63,7 @@ def train_model(eval_ds, train_ds):
         eval_dataset=eval_ds,
         args=qlora_args,
         peft_config=qlora_config,
+       data_collator=custom_data_collator
     )
     
     trainer_qlora.train()

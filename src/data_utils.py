@@ -1,11 +1,13 @@
 import json
 import os
+import torch
 from torch.utils.data import IterableDataset
 from datasets import load_dataset, Audio, Dataset
 import torchaudio
 import re # Added for regex operations
 import pandas as pd # Added for CSV handling
 from tqdm import tqdm
+import librosa
 
 class SIFT50MDataset(IterableDataset):
     def __init__(self, sift_dataset: Dataset, base_datasets_paths):
@@ -17,17 +19,24 @@ class SIFT50MDataset(IterableDataset):
     def _build_common_voice_csv_mapping(self, lang, csv_path):
         # Load the Common Voice dataset
         dataset = load_dataset("mozilla-foundation/common_voice_15_0", lang, split="train", trust_remote_code=True)
-        print('mapping csv')
+        #print('mapping csv')
         dataset = dataset.cast_column("audio", Audio(decode=False))
         # Create a list of dictionaries for the CSV
         mapping_data = []
         for entry in tqdm(dataset):
-            filename_without_ext = os.path.splitext(os.path.basename(entry['path']))[0]
-            mapping_data.append({
-                'id': filename_without_ext,
-                'audio_path': entry['audio']['path']
-            })
-        
+            # Get the absolute path from the Hugging Face cache
+            local_audio_path = os.path.abspath(entry['audio']['path'])
+    
+            # Verify if the file exists before adding it to the mapping
+            if os.path.exists(local_audio_path):
+                filename_without_ext = os.path.splitext(os.path.basename(entry['path']))[0]
+                mapping_data.append({
+                    'id': filename_without_ext,
+                    'audio_path': local_audio_path
+                })
+            else:
+                print(f"File not found: {local_audio_path}. Skipping.")
+            
         # Create DataFrame and save to CSV
         df = pd.DataFrame(mapping_data)
         df.to_csv(csv_path, index=False)
@@ -78,7 +87,7 @@ class SIFT50MDataset(IterableDataset):
     def _load_base_dataset_references(self):
         references = {}
         for ds_name, ds_path in self.base_datasets_paths.items():
-            print(ds_name, ds_path)
+            #print(ds_name, ds_path)
             if ds_name == "common_voice_de":
                 # Build CSV mapping for German Common Voice
                 csv_path = "./data/common_voice_de_mapping.csv"
@@ -130,36 +139,41 @@ class SIFT50MDataset(IterableDataset):
 
     def _process_content_list(self, content_list, data_source, target_ids):
         # This function recursively processes the list of dictionaries in 'content'
-        found_path = None
-
-        # Ensure we are always working with an iterable list of items
+        found_urls = [] # Changed from found_paths to found_urls
+    
+        # Ensure iterable
         if not isinstance(content_list, (list, tuple)):
             content_list = [content_list]
-
+        
         for item in content_list:
             if isinstance(item, dict):
+                # Add 'type' for text items
+                if 'text' in item.keys() and item['text'] is not None:
+                    item['type'] = 'text'
+                
+                # Process audio items
+                if 'audio_path' in item.keys() and item['audio_path'] is not None:
+                    filename_without_ext = os.path.splitext(os.path.basename(item['audio_path']))[0]
+                    
+                    for target_id in target_ids:
+                        if filename_without_ext == target_id:
+                            mapped_audio_path = self._get_audio_path_from_base_dataset(data_source, target_id)
+                            if mapped_audio_path:
+                                # Rename the key and add type
+                                item['audio_path'] = mapped_audio_path
+                                item['type'] = 'audio'
+                                found_urls.append(mapped_audio_path)
+                
+                # Handle nested lists/dictionaries
                 for key, value in item.items():
-                    if key == 'audio_path' and value is not None:
-                        filename_without_ext = os.path.splitext(os.path.basename(value))[0]
-                        for target_id in target_ids:
-                            if filename_without_ext == target_id:
-                                # Use the new helper function for lazy loading
-                                mapped_audio_path = self._get_audio_path_from_base_dataset(data_source, target_id)
-                                if mapped_audio_path:
-                                    item[key] = mapped_audio_path
-                                    found_path = mapped_audio_path
-                                    break # Found a match, move to next item
-                    elif isinstance(value, (list, tuple)):
-                        # Recursively call for nested lists/tuples of dictionaries
-                        nested_found_path = self._process_content_list(value, data_source, target_ids)
-                        if nested_found_path: 
-                            found_path = nested_found_path
+                    if isinstance(value, (list, tuple)):
+                        nested_found_urls = self._process_content_list(value, data_source, target_ids)
+                        found_urls.extend(nested_found_urls)
                     elif isinstance(value, dict):
-                        # Recursively call for nested dictionaries
-                        nested_found_path = self._process_content_list([value], data_source, target_ids)
-                        if nested_found_path: 
-                            found_path = nested_found_path
-        return found_path
+                        nested_found_urls = self._process_content_list([value], data_source, target_ids)
+                        found_urls.extend(nested_found_urls)
+        
+        return found_urls
 
     def __iter__(self):
         for entry in self.sift_dataset:
@@ -167,25 +181,20 @@ class SIFT50MDataset(IterableDataset):
             data_source = entry['data_source']
             sift_entry_id = entry['id']
 
-            # Process SIFT-50M ID to get target IDs for matching
-            processed_sift_id_string = re.sub(r"^comparison_", "", sift_entry_id)
-            target_ids = processed_sift_id_string.split("__")
+            # Process SIFT-50M ID to get target IDs for matching in comparison subset
+            #processed_sift_id_string = re.sub(r"^comparison_", "", sift_entry_id)
+            #target_ids = processed_sift_id_string.split("__")
+            target_ids= [sift_entry_id]
+            #print(target_ids)
             
             # Ensure 'message' is a list of dictionaries and create a mutable copy
             modified_message = entry['messages'].copy() if isinstance(entry['messages'], list) else []
             
-            total_found_audio_path = None
 
             # Iterate through the top-level list (user/assistant roles)
             for role_entry in modified_message:
-                if isinstance(role_entry, dict) and 'content' in role_entry and isinstance(role_entry['content'], (list, tuple)):
-                    # Process the inner 'content' list of dictionaries
+                if isinstance(role_entry, dict) and 'content' in role_entry.keys() and role_entry['role'] != 'assistant':
                     current_found_path = self._process_content_list(role_entry['content'], data_source, target_ids)
-                    if current_found_path: 
-                        total_found_audio_path = current_found_path
-            entry['messages'] = modified_message # Update the entry with modified message
 
-            yield {
-                'audio_path': total_found_audio_path, 
-                'metadata': entry
-            }
+            entry['messages'] = modified_message # Update the entry with modified message
+            yield entry
