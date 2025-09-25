@@ -6,11 +6,11 @@ The central goal of this project is to investigate how Speech LLMs handle noisy 
 
 To obtain clean and noisy samples run:
 
-`python clean_vs_noise_data.py`
+`python clean_vs_noise_data.ipynb`
 
 To run the base model for inference use:
 
-`python inference.py`
+`python inference.ipynb`
 
 Authors:
 - Arunima Chaurasia
