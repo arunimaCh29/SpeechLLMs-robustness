@@ -183,8 +183,6 @@ class SIFT50MDataset(IterableDataset):
                                 item['audio_path'] = mapped_audio_path
                                 item['type'] = 'audio'
                                 found_urls.append(mapped_audio_path)
-                            else:
-                                print(f'Path not found for id: {target_id}')
                 
                 # Handle nested lists/dictionaries
                 for key, value in item.items():
@@ -226,7 +224,7 @@ class SIFT50MDataset(IterableDataset):
                 yield entry
             else:
                 # Optional: print or log skipped entries
-                print(f"Skipping entry {sift_entry_id}, no valid audio found.")
+                #print(f"Skipping entry {sift_entry_id}, no valid audio found.")
                 continue
 
 

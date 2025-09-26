@@ -10,7 +10,7 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     
 def train_model(eval_ds, train_ds, processor, custom_data_collator, resume=False):
     model_id = "Qwen/Qwen2-Audio-7B-Instruct"
-    save_dir = './qwen2-audio-7B-content'
+    save_dir = './qwen2-audio-7B-content-1x'
     
     # Configure quantization
     bnb_config = BitsAndBytesConfig(
@@ -30,33 +30,36 @@ def train_model(eval_ds, train_ds, processor, custom_data_collator, resume=False
         
     qlora_args = SFTConfig(
         output_dir=save_dir,
-        per_device_train_batch_size=2,
+        #per_device_train_batch_size=2,
+        per_device_train_batch_size=4, 
+        per_device_eval_batch_size=4,
         gradient_accumulation_steps=2,
         num_train_epochs=1,
-        max_steps=1000,
-        logging_steps=10,
+        max_steps=1600,
+        logging_steps=200,
         logging_dir="./logs",                # local TensorBoard logs
         logging_strategy="steps",            # "steps" or "epoch"
         report_to='none', # where to report
         run_name="qwen2-audio-qlora",
         #eval_strategy="epoch",
         eval_strategy="steps",
-        eval_steps=500,       # run eval every 500 training steps
+        eval_steps=200,       # run eval every 500 training steps
         save_strategy="steps",
-        save_steps=500,
+        save_steps=200,
        # save_strategy="epoch",
-        learning_rate=0.001,
+        learning_rate=0.0001,
         bf16=True,
         load_best_model_at_end= True,      
         packing=False,
         gradient_checkpointing= True,
         #dataset_text_field="messages",
-        push_to_hub = True
+        push_to_hub = True,
+        #use_cpu=True
     )
     
     
     qlora_config = LoraConfig(
-        r=16,
+        r=8,
         lora_alpha=32,
         lora_dropout=0.05,
         bias="none",
