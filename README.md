@@ -4,11 +4,13 @@ Speech-based large language models (Speech LLMs) have recently gained significan
 
 The central goal of this project is to investigate how Speech LLMs handle noisy question-answering tasks, and whether parameter-efficient fine-tuning methods can improve robustness. Specifically, we study quantized low-rank adaptation (QLoRA) improve robustness to noisy input more effectively than training solely on augmented noisy data. Understanding this trade-off is crucial for developing efficient training strategies that are scalable and deployable under realistic compute constraints.
 
+`training.ipynb` has the training for the fine-tune model. To get the dataset downloaded use; `dataset_download.ipynb`.
+
 To obtain clean and noisy samples run:
 
 `clean_vs_noise_data.ipynb`
 
-To run the base model for inference use:
+To run the base model and fine-tune for inference use:
 
 `inference.ipynb`
 
