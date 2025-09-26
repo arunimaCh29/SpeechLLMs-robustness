@@ -213,7 +213,7 @@ class SIFT50MDataset(IterableDataset):
             found_any_audio = False
             # Iterate through the top-level list (user/assistant roles)
             for role_entry in modified_message:
-                if isinstance(role_entry, dict) and 'content' in role_entry.keys() and role_entry['role'] != 'assistant':
+                if isinstance(role_entry, dict) and 'content' in role_entry.keys():
                     current_found_path = self._process_content_list(role_entry['content'], data_source, target_ids)
                     #print(current_found_path)
                     if len(current_found_path) > 0:
